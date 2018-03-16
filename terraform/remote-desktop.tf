@@ -5,8 +5,9 @@ resource "aws_key_pair" "desktop" {
 
 resource "aws_vpc" "desktop" {
   cidr_block           = "10.0.0.0/16"
-	enable_dns_support   = true
-	enable_dns_hostnames = true
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
   tags {
     Name = "desktop"
   }
@@ -15,6 +16,7 @@ resource "aws_vpc" "desktop" {
 resource "aws_subnet" "desktop" {
   vpc_id     = "${aws_vpc.desktop.id}"
   cidr_block = "10.0.1.0/24"
+
   tags {
     Name = "desktop"
   }
@@ -100,12 +102,12 @@ data "aws_ami" "desktop" {
 }
 
 resource "aws_instance" "desktop" {
-  ami           = "${data.aws_ami.desktop.id}"
-  instance_type = "t2.xlarge"
-  subnet_id = "${aws_subnet.desktop.id}"
+  ami                         = "${data.aws_ami.desktop.id}"
+  instance_type               = "t2.xlarge"
+  subnet_id                   = "${aws_subnet.desktop.id}"
   associate_public_ip_address = true
-  vpc_security_group_ids = ["${aws_security_group.desktop.id}"]
-  key_name = "${aws_key_pair.desktop.id}"
+  vpc_security_group_ids      = ["${aws_security_group.desktop.id}"]
+  key_name                    = "${aws_key_pair.desktop.id}"
 
   root_block_device {
     volume_type = "gp2"
@@ -155,6 +157,7 @@ su --login admin -c 'ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts'
 su --login admin -c 'git clone git@github.com:peleteiro/dotfiles.git'
 su --login admin -c 'cd dotfiles && make'
 su --login admin -c 'git clone git@github.com:biblebox/biblebox.git'
+su --login admin -c 'cd biblebox && git submodule init && git submodule update'
 
 apt autoremove -y
 
