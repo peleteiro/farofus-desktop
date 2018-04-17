@@ -85,6 +85,11 @@ resource "aws_security_group" "desktop" {
   }
 }
 
+resource "aws_eip" "desktop" {
+  instance = "${aws_spot_instance_request.desktop.spot_instance_id}"
+  vpc      = true
+}
+
 data "aws_ami" "desktop" {
   most_recent = true
 
@@ -101,7 +106,7 @@ data "aws_ami" "desktop" {
   owners = ["379101102735"] # Debian
 }
 
-resource "aws_instance" "desktop" {
+resource "aws_spot_instance_request" "desktop" {
   ami                         = "${data.aws_ami.desktop.id}"
   instance_type               = "t2.xlarge"
   subnet_id                   = "${aws_subnet.desktop.id}"
@@ -109,9 +114,13 @@ resource "aws_instance" "desktop" {
   vpc_security_group_ids      = ["${aws_security_group.desktop.id}"]
   key_name                    = "${aws_key_pair.desktop.id}"
 
+  spot_price           = "0.0557"
+  spot_type            = "one-time"
+  wait_for_fulfillment = true
+
   root_block_device {
     volume_type = "gp2"
-    volume_size = 60
+    volume_size = 200
   }
 
   user_data = <<EOF
@@ -122,7 +131,7 @@ DEBIAN_FRONTEND=noninteractive UCF_FORCE_CONFFNEW=YES apt -y -o Dpkg::Options::=
 apt purge -y awscli
 
 apt install -y apt-utils bash build-essential git tmux vim-nox curl wget apt-transport-https ca-certificates \
-               gnupg2 dirmngr software-properties-common direnv python-pip
+               gnupg2 dirmngr software-properties-common direnv python-pip hashdeep
 
 # Docker
 curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add -
@@ -172,7 +181,7 @@ EOF
 resource "cloudflare_record" "desktop" {
   domain  = "farofus.com"
   name    = "d"
-  value   = "${aws_instance.desktop.public_ip}"
+  value   = "${aws_eip.desktop.public_ip}"
   type    = "A"
   proxied = false
 }
