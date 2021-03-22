@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 
 init:
-	@cd terraform && terraform init
+	@cd terraform && terraform init --upgrade
 
 apply:
 	@cd terraform && terraform apply

@@ -1,6 +1,6 @@
 resource "aws_key_pair" "desktop" {
   key_name   = "desktop"
-  public_key = "${file("~/.ssh/id_rsa.pub")}"
+  public_key = file("~/.ssh/id_rsa.pub")
 }
 
 resource "aws_vpc" "desktop" {
@@ -8,42 +8,42 @@ resource "aws_vpc" "desktop" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags {
+  tags = {
     Name = "desktop"
   }
 }
 
 resource "aws_subnet" "desktop" {
-  vpc_id     = "${aws_vpc.desktop.id}"
+  vpc_id     = aws_vpc.desktop.id
   cidr_block = "10.0.1.0/24"
 
-  tags {
+  tags = {
     Name = "desktop"
   }
 }
 
 resource "aws_internet_gateway" "desktop" {
-  vpc_id = "${aws_vpc.desktop.id}"
+  vpc_id = aws_vpc.desktop.id
 }
 
 resource "aws_route_table" "desktop" {
-  vpc_id = "${aws_vpc.desktop.id}"
+  vpc_id = aws_vpc.desktop.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_internet_gateway.desktop.id}"
+    gateway_id = aws_internet_gateway.desktop.id
   }
 }
 
 resource "aws_route_table_association" "desktop" {
-  subnet_id      = "${aws_subnet.desktop.id}"
-  route_table_id = "${aws_route_table.desktop.id}"
+  subnet_id      = aws_subnet.desktop.id
+  route_table_id = aws_route_table.desktop.id
 }
 
 resource "aws_security_group" "desktop" {
   description = "Desktop"
 
-  vpc_id = "${aws_vpc.desktop.id}"
+  vpc_id = aws_vpc.desktop.id
   name   = "desktop"
 
   ingress {
@@ -86,7 +86,7 @@ resource "aws_security_group" "desktop" {
 }
 
 resource "aws_eip" "desktop" {
-  instance = "${aws_spot_instance_request.desktop.spot_instance_id}"
+  instance = aws_spot_instance_request.desktop.spot_instance_id
   vpc      = true
 }
 
@@ -107,14 +107,14 @@ data "aws_ami" "desktop" {
 }
 
 resource "aws_spot_instance_request" "desktop" {
-  ami                         = "${data.aws_ami.desktop.id}"
-  instance_type               = "t2.xlarge"
-  subnet_id                   = "${aws_subnet.desktop.id}"
+  ami                         = data.aws_ami.desktop.id
+  instance_type               = "t3a.xlarge"
+  subnet_id                   = aws_subnet.desktop.id
   associate_public_ip_address = true
-  vpc_security_group_ids      = ["${aws_security_group.desktop.id}"]
-  key_name                    = "${aws_key_pair.desktop.id}"
+  vpc_security_group_ids      = [aws_security_group.desktop.id]
+  key_name                    = aws_key_pair.desktop.id
 
-  spot_price           = "0.0557"
+  spot_price           = "0.1"
   spot_type            = "one-time"
   wait_for_fulfillment = true
 
@@ -130,27 +130,37 @@ DEBIAN_FRONTEND=noninteractive UCF_FORCE_CONFFNEW=YES apt -y -o Dpkg::Options::=
 
 apt purge -y awscli
 
-apt install -y apt-utils bash build-essential git tmux vim-nox curl wget apt-transport-https ca-certificates \
-               gnupg2 dirmngr software-properties-common direnv python-pip hashdeep
+apt install -y \
+        git zlib1g-dev wget tar gpg dirmngr automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev unzip curl \
+        dumb-init bash curl hashdeep python build-essential locales jq apt-utils lsb-release apt-transport-https gpg-agent ca-certificates \
+        gnupg2 software-properties-common direnv python-pip
+
+locale-gen C.UTF-8
+/usr/sbin/update-locale LANG=C.UTF-8
+
+# asdf
+su --login admin -c ' \
+  git clone https://github.com/asdf-vm/asdf.git /home/admin/.asdf --branch v0.7.8 && \
+  chmod +x /home/admin/.asdf/asdf.sh && \
+  echo 'source /home/admin/.asdf/asdf.sh' >> /home/admin/.bashrc && \
+  source /home/admin/.asdf/asdf.sh && \
+  asdf plugin-add nodejs && \
+  asdf plugin-add yarn && \
+  asdf plugin-add golang && \
+  asdf plugin-add python && \
+  asdf plugin-add terraform && \
+  asdf plugin-add java && \
+  /home/admin/.asdf/plugins/nodejs/bin/import-release-team-keyring && \
+  asdf install'
 
 # Docker
 curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add -
 add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
 
-# Node 9.x
-curl -sL https://deb.nodesource.com/setup_9.x | bash -
-
-# Yarn
-curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
-echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
-
-# Scala SBT
-echo "deb https://dl.bintray.com/sbt/debian /" | tee -a /etc/apt/sources.list.d/sbt.list
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
-
 apt update
-apt install -y nodejs yarn openjdk-8-jdk-headless sbt bc docker-ce
+apt install -y docker-ce
 
+# ssh key
 echo "${file("~/.ssh/id_rsa")}" | tee -a /home/admin/.ssh/id_rsa
 chown admin /home/admin/.ssh/id_rsa
 chmod 0600 /home/admin/.ssh/id_rsa
@@ -169,19 +179,18 @@ su --login admin -c 'git clone git@github.com:biblebox/biblebox.git'
 su --login admin -c 'cd biblebox && git submodule init && git submodule update'
 
 apt autoremove -y
-
 reboot
 EOF
 
-  tags {
+  tags = {
     Name = "desktop"
   }
 }
 
 resource "cloudflare_record" "desktop" {
-  domain  = "farofus.com"
+  zone_id  = "63fc3a8d972e286eeb0a3ccac356bdd4"
   name    = "d"
-  value   = "${aws_eip.desktop.public_ip}"
+  value   = aws_eip.desktop.public_ip
   type    = "A"
   proxied = false
 }

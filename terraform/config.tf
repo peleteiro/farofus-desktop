@@ -1,3 +1,7 @@
+locals {
+  aws_region = "us-east-2"
+}
+
 terraform {
   backend "s3" {
     bucket = "farofus-terraform"
@@ -9,5 +13,5 @@ terraform {
 provider "cloudflare" {}
 
 provider "aws" {
-  region = "us-east-1"
+  region = local.aws_region
 }
