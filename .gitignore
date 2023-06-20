@@ -2,8 +2,5 @@
 .#*
 *~
 
-terraform.tfvars
-terraform.tfplan
-terraform.tfstate.*.backup
-terraform.tfstate.backup
 terraform/.terraform
+terraform/.terraform.lock.hcl

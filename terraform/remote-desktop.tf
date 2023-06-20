@@ -55,22 +55,8 @@ resource "aws_security_group" "desktop" {
 
   ingress {
     protocol    = "tcp"
-    from_port   = 80
-    to_port     = 80
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    protocol    = "tcp"
-    from_port   = 443
-    to_port     = 443
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    protocol    = "tcp"
-    from_port   = 8000
-    to_port     = 8999
+    from_port   = 3000
+    to_port     = 3999
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -87,7 +73,7 @@ resource "aws_security_group" "desktop" {
 
 resource "aws_eip" "desktop" {
   instance = aws_spot_instance_request.desktop.spot_instance_id
-  vpc      = true
+  domain   = "vpc"
 }
 
 data "aws_ami" "desktop" {
@@ -95,7 +81,7 @@ data "aws_ami" "desktop" {
 
   filter {
     name   = "name"
-    values = ["debian-stretch-hvm-x86_64-gp2-*"]
+    values = ["debian-11-amd64-*"]
   }
 
   filter {
@@ -103,12 +89,12 @@ data "aws_ami" "desktop" {
     values = ["hvm"]
   }
 
-  owners = ["379101102735"] # Debian
+  owners = ["136693071363"] # Debian
 }
 
 resource "aws_spot_instance_request" "desktop" {
   ami                         = data.aws_ami.desktop.id
-  instance_type               = "t3a.xlarge"
+  instance_type               = "t3.large"
   subnet_id                   = aws_subnet.desktop.id
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.desktop.id]
@@ -132,33 +118,41 @@ apt purge -y awscli
 
 apt install -y \
         git zlib1g-dev wget tar gpg dirmngr automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev unzip curl \
-        dumb-init bash curl hashdeep python build-essential locales jq apt-utils lsb-release apt-transport-https gpg-agent ca-certificates \
-        gnupg2 software-properties-common direnv python-pip
-
-locale-gen C.UTF-8
-/usr/sbin/update-locale LANG=C.UTF-8
+        dumb-init bash curl hashdeep python3 build-essential locales jq apt-utils lsb-release apt-transport-https gpg-agent ca-certificates \
+        gnupg gnupg2 software-properties-common direnv python3-pip rsync locales-all tmux neovim
 
 # asdf
 su --login admin -c ' \
-  git clone https://github.com/asdf-vm/asdf.git /home/admin/.asdf --branch v0.7.8 && \
+  git clone https://github.com/asdf-vm/asdf.git /home/admin/.asdf --branch v0.12.0 && \
   chmod +x /home/admin/.asdf/asdf.sh && \
-  echo 'source /home/admin/.asdf/asdf.sh' >> /home/admin/.bashrc && \
-  source /home/admin/.asdf/asdf.sh && \
-  asdf plugin-add nodejs && \
-  asdf plugin-add yarn && \
-  asdf plugin-add golang && \
-  asdf plugin-add python && \
-  asdf plugin-add terraform && \
-  asdf plugin-add java && \
-  /home/admin/.asdf/plugins/nodejs/bin/import-release-team-keyring && \
-  asdf install'
+  echo "source /home/admin/.asdf/asdf.sh" >> /home/admin/.bash_profile && \
+  echo "source /home/admin/.asdf/completions/asdf.bash" >> /home/admin/.bash_profile'
+
+su --login admin -c 'asdf plugin-add nodejs'
+su --login admin -c 'asdf plugin-add yarn'
+su --login admin -c 'asdf plugin-add golang'
+su --login admin -c 'asdf plugin-add python'
+su --login admin -c 'asdf plugin-add terraform'
+su --login admin -c 'asdf plugin-add java'
+su --login admin -c 'asdf plugin-add awscli'
+su --login admin -c 'asdf plugin-add flutter'
+su --login admin -c 'asdf plugin-add jq'
+su --login admin -c 'asdf plugin-add protoc'
+su --login admin -c 'asdf plugin-add ripgrep'
+su --login admin -c 'asdf plugin-add ruby'
+su --login admin -c 'asdf plugin-add kotlin'
 
 # Docker
-curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | apt-key add -
-add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
-
-apt update
-apt install -y docker-ce
+for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do sudo apt-get remove $pkg; done
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+  "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # ssh key
 echo "${file("~/.ssh/id_rsa")}" | tee -a /home/admin/.ssh/id_rsa
@@ -170,13 +164,11 @@ usermod -aG docker admin
 systemctl enable docker
 systemctl restart docker
 
-su --login admin -c 'pip install awscli --upgrade --user'
-
 su --login admin -c 'ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts'
 su --login admin -c 'git clone git@github.com:peleteiro/dotfiles.git'
 su --login admin -c 'cd dotfiles && make'
 su --login admin -c 'git clone git@github.com:biblebox/biblebox.git'
-su --login admin -c 'cd biblebox && git submodule init && git submodule update'
+su --login admin -c 'cd biblebox && git submodule init && git submodule update && asdf install'
 
 apt autoremove -y
 reboot
@@ -188,7 +180,7 @@ EOF
 }
 
 resource "cloudflare_record" "desktop" {
-  zone_id  = "63fc3a8d972e286eeb0a3ccac356bdd4"
+  zone_id = "0d8789dd96c8237058e669fe8d4348e9" # peleteiro.dev
   name    = "d"
   value   = aws_eip.desktop.public_ip
   type    = "A"

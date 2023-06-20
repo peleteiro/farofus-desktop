@@ -4,6 +4,9 @@ SHELL := /bin/bash
 init:
 	@cd terraform && terraform init --upgrade
 
+lint:
+	@cd terraform && terraform fmt
+
 apply:
 	@cd terraform && terraform apply
 
