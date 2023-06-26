@@ -3,6 +3,20 @@ resource "aws_key_pair" "desktop" {
   public_key = file("~/.ssh/id_rsa.pub")
 }
 
+resource "aws_ebs_volume" "desktop" {
+  size              = 40
+  availability_zone = local.availability_zone
+  tags = {
+    Name = "desktop"
+  }
+}
+
+resource "aws_volume_attachment" "desktop" {
+  device_name = "/dev/sdh"
+  volume_id   = aws_ebs_volume.desktop.id
+  instance_id = aws_spot_instance_request.desktop.spot_instance_id
+}
+
 resource "aws_vpc" "desktop" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
@@ -72,8 +86,12 @@ resource "aws_security_group" "desktop" {
 }
 
 resource "aws_eip" "desktop" {
-  instance = aws_spot_instance_request.desktop.spot_instance_id
-  domain   = "vpc"
+  domain = "vpc"
+}
+
+resource "aws_eip_association" "eip_assoc" {
+  allocation_id = aws_eip.desktop.id
+  instance_id   = aws_spot_instance_request.desktop.spot_instance_id
 }
 
 data "aws_ami" "desktop" {
@@ -81,7 +99,7 @@ data "aws_ami" "desktop" {
 
   filter {
     name   = "name"
-    values = ["debian-11-amd64-*"]
+    values = ["debian-12-amd64-*"]
   }
 
   filter {
@@ -99,8 +117,9 @@ resource "aws_spot_instance_request" "desktop" {
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.desktop.id]
   key_name                    = aws_key_pair.desktop.id
+  availability_zone           = local.availability_zone
 
-  spot_price           = "0.1"
+  spot_price           = "0.2"
   spot_type            = "one-time"
   wait_for_fulfillment = true
 
@@ -167,16 +186,30 @@ systemctl restart docker
 su --login admin -c 'ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts'
 su --login admin -c 'git clone git@github.com:peleteiro/dotfiles.git'
 su --login admin -c 'cd dotfiles && make'
-su --login admin -c 'git clone git@github.com:biblebox/biblebox.git'
-su --login admin -c 'cd biblebox && git submodule init && git submodule update && asdf install'
 
 apt autoremove -y
+
+(file -s `readlink -f /dev/sdh` | grep ext4) || mkfs.ext4 /dev/sdh
+mkdir -p /mnt/data
+echo "/dev/sdh /mnt/data ext4 defaults 0 0" >> /etc/fstab
+
+mount -a
+
+chown admin:admin /mnt/data
+sudo ln -s /mnt/data /home/admin/data
+
 reboot
 EOF
 
   tags = {
     Name = "desktop"
   }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+
+  depends_on = [aws_ebs_volume.desktop]
 }
 
 resource "cloudflare_record" "desktop" {

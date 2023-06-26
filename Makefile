@@ -18,3 +18,6 @@ start:
 
 stop:
 	@aws ec2 stop-instances --region `cd terraform && terraform output INSTANCE_REGION` --instance-id `cd terraform && terraform output INSTANCE_ID`
+
+terminate:
+	@cd terraform && terraform destroy -target=aws_spot_instance_request.desktop
