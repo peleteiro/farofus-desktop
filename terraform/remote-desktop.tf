@@ -30,6 +30,7 @@ resource "aws_vpc" "desktop" {
 resource "aws_subnet" "desktop" {
   vpc_id     = aws_vpc.desktop.id
   cidr_block = "10.0.1.0/24"
+  availability_zone = local.availability_zone
 
   tags = {
     Name = "desktop"
@@ -138,7 +139,7 @@ apt purge -y awscli
 apt install -y \
         git zlib1g-dev wget tar gpg dirmngr automake autoconf libreadline-dev libncurses-dev libssl-dev libyaml-dev libxslt-dev libffi-dev libtool unixodbc-dev unzip curl \
         dumb-init bash curl hashdeep python3 build-essential locales jq apt-utils lsb-release apt-transport-https gpg-agent ca-certificates \
-        gnupg gnupg2 software-properties-common direnv python3-pip rsync locales-all tmux neovim
+        gnupg gnupg2 software-properties-common direnv python3-pip rsync locales-all tmux neovim entr
 
 # asdf
 su --login admin -c ' \
